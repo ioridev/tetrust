@@ -82,7 +82,7 @@ fn is_collision(field: &Field, pos: &Position, block: BlockKind) -> bool {
 }
 
 fn main() {
-    let field = [
+    let field = Arc::new(Mutex::new([
         [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
         [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
         [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
@@ -104,24 +104,28 @@ fn main() {
         [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
         [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
         [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    ];
+    ]));
 
     let pos = Arc::new(Mutex::new(Position { x: 4, y: 0 }));
 
     println!("\x1b[2J\x1b[H\x1b[?25l");
 
     // フィールドを描画
-    draw(&field, &pos.lock().unwrap());
+    draw(&field.lock().unwrap(), &pos.lock().unwrap());
 
     // 自然落下処理
     {
         let pos = Arc::clone(&pos);
+        let field = Arc::clone(&field);
+
         let _ = thread::spawn(move || {
             loop {
                 // 1秒間スリーブする
                 thread::sleep(time::Duration::from_millis(1000));
                 // 自然落下
                 let mut pos = pos.lock().unwrap();
+                let mut field = field.lock().unwrap();
+
                 let new_pos = Position {
                     x: pos.x,
                     y: pos.y + 1,
@@ -129,6 +133,17 @@ fn main() {
                 if !is_collision(&field, &new_pos, BlockKind::I) {
                     // posの座標を更新
                     *pos = new_pos;
+                } else {
+                    // ブロックをフィールドに固定
+                    for y in 0..4 {
+                        for x in 0..4 {
+                            if BLOCKS[BlockKind::I as usize][y][x] == 1 {
+                                field[y + pos.y][x + pos.x] = 1;
+                            }
+                        }
+                    }
+                    // posの座標を初期値へ
+                    *pos = Position { x: 4, y: 0 };
                 }
                 // フィールドを描画
                 draw(&field, &pos);
@@ -143,6 +158,8 @@ fn main() {
         match g.getch() {
             Ok(Key::Left) => {
                 let mut pos = pos.lock().unwrap();
+                let field = field.lock().unwrap();
+
                 let new_pos = Position {
                     x: pos.x - 1,
                     y: pos.y,
@@ -155,6 +172,8 @@ fn main() {
             }
             Ok(Key::Down) => {
                 let mut pos = pos.lock().unwrap();
+                let field = field.lock().unwrap();
+
                 let new_pos = Position {
                     x: pos.x,
                     y: pos.y + 1,
@@ -167,6 +186,8 @@ fn main() {
             }
             Ok(Key::Right) => {
                 let mut pos = pos.lock().unwrap();
+                let field = field.lock().unwrap();
+
                 let new_pos = Position {
                     x: pos.x + 1,
                     y: pos.y,
